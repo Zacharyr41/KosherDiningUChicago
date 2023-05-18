@@ -82,7 +82,7 @@ def get_hall_meal_data(meal, dining_hall, date):
 
     # Extract and Return the Kosher Menu
     for category in data['menu']['periods']['categories']:
-        if category['name'] == 'Kosher':
+        if  'Kosher' in category['name']:
             return category['items']
 
     return None

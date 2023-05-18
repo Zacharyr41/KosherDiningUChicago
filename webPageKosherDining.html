@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Dine On Campus</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.3/css/bulma.min.css">
+    <style>
+        .is-centered {
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .menu-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 3px rgba(10, 10, 10, .1), 0 0 0 1px rgba(10, 10, 10, .1);
+        }
+
+        .menu-title {
+            margin-bottom: 15px;
+            color: #363636;
+            font-weight: bold;
+        }
+
+        .select {
+            width: 200px;
+            margin: 20px;
+        }
+
+        .loader {
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #3498db;
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <section class="section is-centered">
+        <div class="container">
+            <h1 class="title">Dine On Campus</h1>
+            <div class="field">
+                <label class="label">Date:</label>
+                <div class="control">
+                    <input class="input" type="date" id="date" value="2023-05-18">
+                </div>
+            </div>
+            <div id="loading" style="display: none;">
+                <div class="loader"></div>
+            </div>
+            <div class="field">
+                <label class="label">Meal:</label>
+                <div class="control">
+                    <div class="select">
+                        <select id="meal">
+                            <option>Dinner</option>
+                            <option>Lunch</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="field">
+                <div class="control">
+                    <button class="button is-link" id="update">Update</button>
+                </div>
+            </div>
+            <div id="result"></div>
+        </div>
+    </section>
+    <script>
+        // Create helper functions similar to Python ones
+        const apiBase = 'https://api.dineoncampus.com/v1';
+
+        async function getSiteId(schoolname = 'uchicago') {
+            const response = await fetch(`${apiBase}/sites/${schoolname}/info`);
+            const data = await response.json();
+            return data.site.id;
+        }
+
+        function buildingOfInterest(buildingName) {
+            const list_of_buildings = ['Bartlett Dining Commons', 'Cathey Dining Commons', 'Baker Dining Commons', 'Woodlawn Dining Commons'];
+            return list_of_buildings.includes(buildingName);
+        }
+
+        async function getDiningHallIds(site_id) {
+            const response = await fetch(`${apiBase}/locations/all_locations?platform=0&site_id=${site_id}&for_menus=true&with_address=false&with_buildings=true`);
+            const data = await response.json();
+
+            let building_ids = {};
+            for (let building of data.buildings) {
+                for (let location of building.locations) {
+                    if (buildingOfInterest(location.name) && location.active) {
+                        building_ids[location.name] = location.id;
+                    }
+                }
+            }
+            return building_ids;
+        }
+
+        async function getDiningHallMappings(dining_hall_ids, date) {
+            let dining_hall_mappings = {};
+            for (let [building_name, building_id] of Object.entries(dining_hall_ids)) {
+                const data = await (await fetch(`${apiBase}/location/${building_id}/periods?platform=0&date=${date}`)).json();
+                if (!data.closed) {
+                    dining_hall_mappings[building_name] = {};
+                    for (let period of data.periods) {
+                        if (period.name == 'Lunch' || period.name == 'Dinner') {
+                            dining_hall_mappings[building_name][period.name] = period.id;
+                        }
+                        dining_hall_mappings[building_name]['location_id'] = building_id;
+                    }
+                }
+            }
+            return dining_hall_mappings;
+        }
+
+        async function getHallMealData(meal, dining_hall, date) {
+            let dining_hall_mappings = await getDiningHallMappings(dining_hall_ids, date);
+
+            // Check if the dining hall exists in the mappings
+            if (!dining_hall_mappings.hasOwnProperty(dining_hall)) {
+                console.warn(`Dining hall ${dining_hall} not found in dining hall mappings.`);
+                return null;
+            }
+
+            let location_id = dining_hall_mappings[dining_hall]['location_id'];
+
+            // Check if the meal exists in the mappings for the given dining hall
+            if (!dining_hall_mappings[dining_hall].hasOwnProperty(meal)) {
+                console.warn(`Meal ${meal} not found in the mappings for dining hall ${dining_hall}.`);
+                return null;
+            }
+
+            let meal_id = dining_hall_mappings[dining_hall][meal];
+
+            const data = await (await fetch(`${apiBase}/location/${location_id}/periods/${meal_id}?platform=0&date=${date}`)).json();
+
+            for (let category of data.menu.periods.categories) {
+                if (category.name.includes('Kosher')) {
+                    return category.items;
+                }
+            }
+            return null;
+        }
+
+        async function filterKosherMenu(kosher_items) {
+            let relevant_items = [];
+            for (let item of kosher_items) {
+                let entry = item.desc !== null ? `${item.name}: ${item.desc}` : item.name;
+                relevant_items.push(entry);
+            }
+            return relevant_items;
+        }
+
+        async function fetchMealData(date, meal) {
+            const halls = ['Bartlett Dining Commons', 'Cathey Dining Commons', 'Baker Dining Commons', 'Woodlawn Dining Commons'];
+
+
+            let resultDiv = document.getElementById('result');
+            let loadingDiv = document.getElementById('loading');
+
+            resultDiv.innerHTML = ''; // Clear old results
+            loadingDiv.style.display = 'block'; // Show loading animation
+
+            for (let hall of halls) {
+                const kosher_data = await getHallMealData(meal, hall, date);
+                if (kosher_data) {
+                    const filtered_kosher_data = await filterKosherMenu(kosher_data);
+                    displayResults(hall, filtered_kosher_data);
+                }
+            }
+
+            loadingDiv.style.display = 'none'; // Hide loading animation
+
+        }
+
+        function displayResults(hall, items) {
+            let resultDiv = document.getElementById('result');
+
+            let hallHeader = document.createElement('h2');
+            hallHeader.innerText = hall;
+            hallHeader.classList.add("menu-title");
+            resultDiv.appendChild(hallHeader);
+
+            for (let item of items) {
+                let div = document.createElement('div');
+                div.innerText = item;
+                div.classList.add("menu-item");
+                resultDiv.appendChild(div);
+            }
+        }
+
+        document.getElementById('date').valueAsDate = new Date();
+
+        let site_id, dining_hall_ids;
+        window.onload = async () => {
+            document.getElementById('date').valueAsDate = new Date();
+
+            site_id = await getSiteId();
+            dining_hall_ids = await getDiningHallIds(site_id);
+            let date = document.getElementById('date').value;
+            let meal = document.getElementById('meal').value;
+            fetchMealData(date, meal);
+        };
+
+        document.getElementById('update').addEventListener('click', function () {
+            let date = document.getElementById('date').value;
+            let meal = document.getElementById('meal').value;
+            fetchMealData(date, meal);
+        });
+
+        document.getElementById('meal').addEventListener('change', function () {
+            let resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = ''; // Clear old results
+
+            let date = document.getElementById('date').value;
+            let meal = this.value;
+            fetchMealData(date, meal);
+        });
+    </script>
+</body>
+
+</html>
