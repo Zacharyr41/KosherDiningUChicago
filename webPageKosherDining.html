@@ -1,10 +1,17 @@
 <!DOCTYPE html>
 <html>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.33/moment-timezone-with-data.min.js"></script>
 
 <head>
-    <title>Dine On Campus</title>
+    <title>Kosher Dining @ UChicago</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.3/css/bulma.min.css">
     <style>
+        body {
+            background: #f9f9f9;
+            font-family: 'Helvetica Neue', sans-serif;
+        }
+
         .is-centered {
             justify-content: center;
             align-items: center;
@@ -15,15 +22,22 @@
 
         .menu-item {
             margin-bottom: 10px;
-            padding: 10px;
+            padding: 15px;
             border-radius: 5px;
-            box-shadow: 0 2px 3px rgba(10, 10, 10, .1), 0 0 0 1px rgba(10, 10, 10, .1);
+            box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
+            transition: 0.3s;
+            background: white;
+        }
+
+        .menu-item:hover {
+            box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2);
         }
 
         .menu-title {
-            margin-bottom: 15px;
-            color: #363636;
+            margin-bottom: 20px;
+            color: #007BFF;
             font-weight: bold;
+            text-align: center;
         }
 
         .select {
@@ -32,11 +46,11 @@
         }
 
         .loader {
-            border: 16px solid #f3f3f3;
-            border-top: 16px solid #3498db;
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #007BFF;
             border-radius: 50%;
-            width: 120px;
-            height: 120px;
+            width: 45px;
+            height: 45px;
             animation: spin 2s linear infinite;
         }
 
@@ -49,21 +63,37 @@
                 transform: rotate(360deg);
             }
         }
+
+        .button.is-link {
+            background-color: #007BFF;
+            color: white;
+        }
+
+        .button.is-link:hover {
+            background-color: #0056b3;
+        }
+
+        .title {
+            color: #007BFF;
+            text-align: center;
+        }
+
+        .select select {
+            width: 100%;
+            padding-right: 10px;
+        }
     </style>
 </head>
 
 <body>
     <section class="section is-centered">
         <div class="container">
-            <h1 class="title">Dine On Campus</h1>
+            <h1 class="title">Kosher Dining at UChicago</h1>
             <div class="field">
                 <label class="label">Date:</label>
                 <div class="control">
                     <input class="input" type="date" id="date" value="2023-05-18">
                 </div>
-            </div>
-            <div id="loading" style="display: none;">
-                <div class="loader"></div>
             </div>
             <div class="field">
                 <label class="label">Meal:</label>
@@ -80,6 +110,9 @@
                 <div class="control">
                     <button class="button is-link" id="update">Update</button>
                 </div>
+            </div>
+            <div id="loading" style="display: none;">
+                <div class="loader"></div>
             </div>
             <div id="result"></div>
         </div>
@@ -192,7 +225,7 @@
         }
 
         function displayResults(hall, items) {
-            let resultDiv = document.getElementById('result'); 
+            let resultDiv = document.getElementById('result');
 
             let hallHeader = document.createElement('h2');
             hallHeader.innerText = hall;
@@ -206,12 +239,42 @@
                 resultDiv.appendChild(div);
             }
         }
+        // create a date object in the Central Time Zone
+        let nowInCST = moment().tz("America/Chicago");
 
-        document.getElementById('date').valueAsDate = new Date();
+        let dateStringInCST = nowInCST.format('YYYY-MM-DD');
+        document.getElementById('date').value = dateStringInCST;
+
+        let hourInCST = nowInCST.hour();
+
+        // Set the default meal based on the time of day in Central Time
+        let mealElement = document.getElementById('meal');
+        if (hourInCST < 15) { // it's before 3pm Central Time
+            mealElement.value = "Lunch";
+        } else { // it's after 3pm Central Time
+            mealElement.value = "Dinner";
+        }
+
 
         let site_id, dining_hall_ids;
         window.onload = async () => {
-            document.getElementById('date').valueAsDate = new Date();
+            // create a date object in the Central Time Zone
+            let nowInCST = moment().tz("America/Chicago");
+
+            let dateStringInCST = nowInCST.format('YYYY-MM-DD');
+            document.getElementById('date').value = dateStringInCST;
+
+            let hourInCST = nowInCST.hour();
+
+            // Set the default meal based on the time of day in Central Time
+            let mealElement = document.getElementById('meal');
+            if (hourInCST < 15) { // it's before 3pm Central Time
+                mealElement.value = "Lunch";
+            } else { // it's after 3pm Central Time
+                mealElement.value = "Dinner";
+            }
+
+
 
             site_id = await getSiteId();
             dining_hall_ids = await getDiningHallIds(site_id);
@@ -222,6 +285,7 @@
 
         document.getElementById('update').addEventListener('click', function () {
             let date = document.getElementById('date').value;
+            console.log("DATE: " + date);
             let meal = document.getElementById('meal').value;
             fetchMealData(date, meal);
         });
@@ -231,6 +295,7 @@
             resultDiv.innerHTML = ''; // Clear old results
 
             let date = document.getElementById('date').value;
+            console.log("meal: " + date);
             let meal = this.value;
             fetchMealData(date, meal);
         });
