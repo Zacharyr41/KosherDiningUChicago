@@ -239,21 +239,6 @@
                 resultDiv.appendChild(div);
             }
         }
-        // create a date object in the Central Time Zone
-        let nowInCST = moment().tz("America/Chicago");
-
-        let dateStringInCST = nowInCST.format('YYYY-MM-DD');
-        document.getElementById('date').value = dateStringInCST;
-
-        let hourInCST = nowInCST.hour();
-
-        // Set the default meal based on the time of day in Central Time
-        let mealElement = document.getElementById('meal');
-        if (hourInCST < 15) { // it's before 3pm Central Time
-            mealElement.value = "Lunch";
-        } else { // it's after 3pm Central Time
-            mealElement.value = "Dinner";
-        }
 
 
         let site_id, dining_hall_ids;
@@ -273,8 +258,6 @@
             } else { // it's after 3pm Central Time
                 mealElement.value = "Dinner";
             }
-
-
 
             site_id = await getSiteId();
             dining_hall_ids = await getDiningHallIds(site_id);
@@ -299,6 +282,7 @@
             let meal = this.value;
             fetchMealData(date, meal);
         });
+
     </script>
 </body>
 
